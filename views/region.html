@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Emotify — Region</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#05060a;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.15);--text:#f0ece4;--muted:#5a5a6e}
+html,body{min-height:100%;overflow-y:auto}
+body{font-family:'Syne',sans-serif;background:var(--ink);color:var(--text);cursor:none}
+#cur,#cur-ring{display:none}
+@media(pointer:fine){
+  #cur{display:block;position:fixed;width:8px;height:8px;background:#fff;border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);mix-blend-mode:difference}
+  #cur-ring{display:block;position:fixed;width:32px;height:32px;border:1px solid rgba(255,255,255,0.3);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%)}
+}
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.2;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.1'/%3E%3C/svg%3E")}
+canvas{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.3}
+.note{position:fixed;font-size:1.2rem;pointer-events:none;z-index:2;animation:floatNote var(--dur,8s) linear var(--delay,0s) infinite;opacity:0;color:rgba(255,255,255,0.06)}
+@keyframes floatNote{0%{transform:translateY(110vh) rotate(0deg);opacity:0}10%{opacity:.12}90%{opacity:.06}100%{transform:translateY(-10vh) rotate(360deg);opacity:0}}
+.back-btn{position:fixed;top:1rem;left:1rem;z-index:600;display:flex;align-items:center;gap:.5rem;padding:.5rem 1rem;border-radius:8px;background:rgba(10,12,20,.8);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .25s;backdrop-filter:blur(10px);text-decoration:none}
+.back-btn:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);transform:translateY(-1px)}
+.page{max-width:860px;margin:0 auto;padding:4rem 1.25rem 3rem;position:relative;z-index:10}
+.step-label{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;display:flex;align-items:center;gap:.75rem;animation:fadeUp .6s .1s ease both}
+.step-label::before{content:'';width:24px;height:1px;background:var(--muted)}
+.page-title{font-family:'Instrument Serif',serif;font-size:clamp(2rem,6vw,4rem);font-style:italic;letter-spacing:-1.5px;line-height:1.1;animation:fadeUp .6s .2s ease both}
+.page-sub{font-size:.85rem;color:var(--muted);margin-top:.6rem;line-height:1.8;max-width:420px;animation:fadeUp .6s .3s ease both}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.65rem;margin:2rem 0;animation:fadeUp .6s .4s ease both}
+.region-card{background:rgba(10,12,20,.7);border:1px solid var(--border);border-radius:14px;padding:1.25rem .75rem;text-align:center;cursor:pointer;transition:all .3s;backdrop-filter:blur(10px);-webkit-tap-highlight-color:transparent}
+.region-card:hover,.region-card:active{border-color:rgba(255,255,255,.2);transform:translateY(-3px);background:rgba(255,255,255,.04)}
+.region-card.selected{border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.07);transform:translateY(-3px)}
+.r-flag{font-size:2rem;margin-bottom:.5rem}
+.r-name{font-size:.8rem;font-weight:700}
+.r-genre{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--muted);margin-top:.2rem;letter-spacing:.06em}
+.bottom-bar{display:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:480px){
+  .grid{grid-template-columns:repeat(3,1fr);gap:.5rem}
+  .r-flag{font-size:1.6rem}
+  .r-name{font-size:.72rem}
+  .r-genre{display:none}
+  .region-card{padding:1rem .5rem}
+  .page{padding:3.5rem 1rem 2rem}
+}
+</style>
+</head>
+<body>
+<div id="cur"></div>
+<div id="cur-ring"></div>
+<canvas id="canvas"></canvas>
+<div id="notes"></div>
+<a href="/welcome" class="back-btn">← Back</a>
+<div class="page">
+  <div class="step-label">Step 1 of 2</div>
+  <div class="page-title">Where Are<br>You Listening?</div>
+  <div class="page-sub">We'll tailor music recommendations to your region's charts, culture, and language.</div>
+  <div class="grid" id="grid"></div>
+  <div class="bottom-bar">
+    <div><span id="selected-text">None</span></div>
+    <button class="btn-continue" id="btn-continue" onclick="continueOn()">Detect My Emotion →</button>
+  </div>
+</div>
+<script>
+const cur=document.getElementById('cur'),ring=document.getElementById('cur-ring');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;cur.style.left=mx+'px';cur.style.top=my+'px'});
+(function anim(){rx+=(mx-rx)*.1;ry+=(my-ry)*.1;ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(anim)})();
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+let W,H,particles=[];
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
+resize();window.addEventListener('resize',resize);
+class P{constructor(){this.reset()}reset(){this.x=Math.random()*W;this.y=Math.random()*H;this.r=Math.random()*1.2+.2;this.vx=(Math.random()-.5)*.3;this.vy=(Math.random()-.5)*.3;this.a=Math.random()*.15+.03;this.life=Math.random()*200+100;this.ml=this.life}update(){this.x+=this.vx;this.y+=this.vy;this.life--;if(this.life<0||this.x<0||this.x>W||this.y<0||this.y>H)this.reset()}draw(){ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${this.a*(this.life/this.ml)})`;ctx.fill()}}
+for(let i=0;i<60;i++)particles.push(new P());
+(function anim(){ctx.clearRect(0,0,W,H);particles.forEach(p=>{p.update();p.draw()});requestAnimationFrame(anim)})();
+const notes=['♩','♪','♫','♬','𝄞','♭','♯'];
+const nc=document.getElementById('notes');
+for(let i=0;i<15;i++){const n=document.createElement('div');n.className='note';n.textContent=notes[Math.floor(Math.random()*notes.length)];n.style.cssText=`left:${Math.random()*100}%;--dur:${8+Math.random()*12}s;--delay:${Math.random()*-15}s`;nc.appendChild(n)}
+const REGIONS=[
+  {name:'Pakistan',code:'PK',flag:'🇵🇰',genre:'Sufi · Qawwali'},
+  {name:'India',code:'IN',flag:'🇮🇳',genre:'Bollywood · Hindi'},
+  {name:'United States',code:'US',flag:'🇺🇸',genre:'Pop · Rock'},
+  {name:'United Kingdom',code:'GB',flag:'🇬🇧',genre:'British Indie'},
+  {name:'Saudi Arabia',code:'SA',flag:'🇸🇦',genre:'Arabic · Khaleeji'},
+  {name:'Turkey',code:'TR',flag:'🇹🇷',genre:'Turkish Pop'},
+  {name:'Japan',code:'JP',flag:'🇯🇵',genre:'J-Pop · Anime'},
+  {name:'South Korea',code:'KR',flag:'🇰🇷',genre:'K-Pop'},
+  {name:'UAE',code:'AE',flag:'🇦🇪',genre:'Arabic Pop'},
+  {name:'Canada',code:'CA',flag:'🇨🇦',genre:'Pop · Indie'},
+  {name:'Australia',code:'AU',flag:'🇦🇺',genre:'Indie · Rock'},
+  {name:'Germany',code:'DE',flag:'🇩🇪',genre:'Electronic'},
+  {name:'France',code:'FR',flag:'🇫🇷',genre:'Chanson · Pop'},
+  {name:'Spain',code:'ES',flag:'🇪🇸',genre:'Latin · Flamenco'},
+  {name:'Brazil',code:'BR',flag:'🇧🇷',genre:'Samba · Bossa'},
+  {name:'Mexico',code:'MX',flag:'🇲🇽',genre:'Regional · Latin'},
+  {name:'Argentina',code:'AR',flag:'🇦🇷',genre:'Tango · Rock'},
+  {name:'Italy',code:'IT',flag:'🇮🇹',genre:'Pop · Opera'},
+  {name:'Netherlands',code:'NL',flag:'🇳🇱',genre:'EDM · House'},
+  {name:'Sweden',code:'SE',flag:'🇸🇪',genre:'Pop · Metal'}
+];
+let selected=null;
+const grid=document.getElementById('grid');
+REGIONS.forEach(r=>{
+  const card=document.createElement('div');
+  card.className='region-card';
+  card.innerHTML=`<div class="r-flag">${r.flag}</div><div class="r-name">${r.name}</div><div class="r-genre">${r.genre}</div>`;
+  card.onclick=()=>{
+    document.querySelectorAll('.region-card').forEach(c=>c.classList.remove('selected'));
+    card.classList.add('selected');
+    selected=r;
+    setTimeout(()=>continueOn(),600);
+  };
+  grid.appendChild(card);
+});
+async function continueOn(){
+  if(!selected)return;
+  try{
+    await fetch('/api/region',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({region:selected.code})});
+    sessionStorage.setItem('region',selected.code);
+    sessionStorage.setItem('regionName',selected.name);
+    window.location.href='/detect';
+  }catch(err){alert('Failed to save region. Please try again.');}
+}
+</script>
+</body>
+</html>

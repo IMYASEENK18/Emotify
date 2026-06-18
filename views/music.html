@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Emotify — Your Playlist</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#05060a;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.15);--text:#f0ece4;--muted:#5a5a6e}
+html,body{min-height:100%;overflow-y:auto}
+body{font-family:'Syne',sans-serif;background:var(--ink);color:var(--text);cursor:none}
+#cur,#cur-ring{display:none}
+@media(pointer:fine){
+  #cur{display:block;position:fixed;width:8px;height:8px;background:#fff;border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);mix-blend-mode:difference}
+  #cur-ring{display:block;position:fixed;width:32px;height:32px;border:1px solid rgba(255,255,255,0.3);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%)}
+}
+canvas{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.35}
+#emotion-overlay{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:0;transition:opacity 2s ease}
+.note{position:fixed;font-size:1.2rem;pointer-events:none;z-index:2;animation:floatNote var(--dur,8s) linear var(--delay,0s) infinite;opacity:0;color:rgba(255,255,255,0.06)}
+@keyframes floatNote{0%{transform:translateY(110vh) rotate(0deg);opacity:0}10%{opacity:.1}90%{opacity:.06}100%{transform:translateY(-10vh) rotate(360deg);opacity:0}}
+.back-btn{position:fixed;top:1rem;left:1rem;z-index:100;display:flex;align-items:center;gap:.5rem;padding:.5rem .9rem;border-radius:8px;background:rgba(10,12,20,.8);border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .25s;backdrop-filter:blur(20px);text-decoration:none}
+.back-btn:hover{color:var(--text);border-color:var(--border2)}
+.page{max-width:920px;margin:0 auto;padding:4rem 1.25rem 3rem;position:relative;z-index:10}
+.music-hero{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid var(--border)}
+.emotion-tag{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem}
+.music-title{font-family:'Instrument Serif',serif;font-size:clamp(1.8rem,5vw,3.5rem);font-style:italic;letter-spacing:-1.5px;line-height:1.1}
+.region-badge{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .8rem;border-radius:5px;border:1px solid var(--border2);font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.08em;margin-top:.75rem}
+.wave-row{display:flex;align-items:flex-end;gap:3px;height:30px;align-self:center}
+.wave-bar{display:inline-block;width:3px;border-radius:2px;animation:wave var(--d,.8s) ease-in-out infinite alternate;animation-delay:var(--del,0s)}
+@keyframes wave{from{height:4px}to{height:var(--h,20px)}}
+.section-label{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:1.25rem;display:flex;align-items:center;gap:.75rem}
+.section-label::before{content:'';width:20px;height:1px;background:var(--muted)}
+.songs-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:2rem}
+.spotify-card{background:rgba(10,12,20,.75);border:1px solid var(--border);border-radius:14px;padding:1rem;transition:all .3s;backdrop-filter:blur(10px);opacity:0;transform:translateY(16px)}
+.spotify-card.visible{opacity:1;transform:translateY(0);transition:opacity .5s ease,transform .5s ease}
+.spotify-card:hover{border-color:rgba(255,255,255,.18);transform:translateY(-2px)}
+.spotify-card iframe{border-radius:12px;width:100%}
+.bottom-actions{display:flex;gap:1rem;flex-wrap:wrap;align-items:center;padding-top:1.5rem;border-top:1px solid var(--border)}
+.btn-rescan{display:flex;align-items:center;gap:.5rem;padding:.75rem 1.25rem;border-radius:8px;background:rgba(10,12,20,.8);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .25s;backdrop-filter:blur(10px);text-decoration:none}
+.btn-rescan:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);transform:translateY(-1px)}
+.btn-home{display:flex;align-items:center;gap:.5rem;padding:.75rem 1.25rem;border-radius:8px;background:rgba(10,12,20,.8);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .25s;backdrop-filter:blur(10px);text-decoration:none}
+.btn-home:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);transform:translateY(-1px)}
+.toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(10,12,20,.95);border:1px solid var(--border2);padding:.65rem 1.25rem;border-radius:10px;font-family:'DM Mono',monospace;font-size:.7rem;z-index:1000;opacity:0;transition:all .4s ease;backdrop-filter:blur(20px);white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:600px){
+  .music-hero{flex-direction:column;gap:.75rem}
+  .wave-row{display:none}
+  .bottom-actions{flex-direction:column;align-items:stretch}
+  .btn-rescan,.btn-home{justify-content:center}
+  .page{padding:3.5rem 1rem 2rem}
+}
+</style>
+</head>
+<body>
+<div id="cur"></div>
+<div id="cur-ring"></div>
+<canvas id="canvas"></canvas>
+<div id="emotion-overlay"></div>
+<div id="notes"></div>
+<a href="/detect" class="back-btn">← Rescan</a>
+<div id="toast" class="toast"></div>
+<div class="page">
+  <div class="music-hero">
+    <div>
+      <div class="emotion-tag" id="emotion-tag">Detected emotion</div>
+      <div class="music-title" id="music-title">Your Playlist</div>
+      <div class="region-badge" id="region-badge">🌍 Global</div>
+    </div>
+    <div class="wave-row" id="wave-row"></div>
+  </div>
+  <div class="section-label" id="section-label">Recommended for you</div>
+  <div class="songs-grid" id="songs-grid"></div>
+  <div class="bottom-actions">
+    <a href="/detect" class="btn-rescan">↺ Scan Again</a>
+    <a href="/welcome" class="btn-home">⌂ Home</a>
+  </div>
+</div>
+<script>
+const cur=document.getElementById('cur'),ring=document.getElementById('cur-ring');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;cur.style.left=mx+'px';cur.style.top=my+'px'});
+(function anim(){rx+=(mx-rx)*.1;ry+=(my-ry)*.1;ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(anim)})();
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+let W,H,particles=[];
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
+resize();window.addEventListener('resize',resize);
+class P{constructor(){this.reset()}reset(){this.x=Math.random()*W;this.y=Math.random()*H;this.r=Math.random()*1.2+.2;this.vx=(Math.random()-.5)*.3;this.vy=(Math.random()-.5)*.3;this.a=Math.random()*.15+.03;this.life=Math.random()*200+100;this.ml=this.life}update(){this.x+=this.vx;this.y+=this.vy;this.life--;if(this.life<0||this.x<0||this.x>W||this.y<0||this.y>H)this.reset()}draw(){ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${this.a*(this.life/this.ml)})`;ctx.fill()}}
+for(let i=0;i<60;i++)particles.push(new P());
+(function anim(){ctx.clearRect(0,0,W,H);particles.forEach(p=>{p.update();p.draw()});requestAnimationFrame(anim)})();
+const noteChars=['♩','♪','♫','♬','𝄞','♭','♯'];
+const nc=document.getElementById('notes');
+for(let i=0;i<18;i++){const n=document.createElement('div');n.className='note';n.textContent=noteChars[Math.floor(Math.random()*noteChars.length)];n.style.cssText=`left:${Math.random()*100}%;--dur:${8+Math.random()*12}s;--delay:${Math.random()*-15}s`;nc.appendChild(n)}
+const EMOTIONS={happy:{emoji:'😊',label:'Happy',c1:'#f59e0b',c2:'#d97706',bg:'radial-gradient(ellipse at 50% 30%, rgba(245,158,11,.18), rgba(217,119,6,.06) 50%, transparent 80%)'},sad:{emoji:'😢',label:'Sad',c1:'#3b82f6',c2:'#1d4ed8',bg:'radial-gradient(ellipse at 50% 30%, rgba(59,130,246,.18), rgba(29,78,216,.06) 50%, transparent 80%)'},angry:{emoji:'😠',label:'Angry',c1:'#ef4444',c2:'#b91c1c',bg:'radial-gradient(ellipse at 50% 30%, rgba(239,68,68,.2), rgba(185,28,28,.08) 50%, transparent 80%)'},fearful:{emoji:'😨',label:'Fearful',c1:'#8b5cf6',c2:'#6d28d9',bg:'radial-gradient(ellipse at 50% 30%, rgba(139,92,246,.18), rgba(109,40,217,.06) 50%, transparent 80%)'},disgusted:{emoji:'🤢',label:'Disgusted',c1:'#10b981',c2:'#065f46',bg:'radial-gradient(ellipse at 50% 30%, rgba(16,185,129,.15), rgba(6,95,70,.06) 50%, transparent 80%)'},surprised:{emoji:'😲',label:'Surprised',c1:'#f97316',c2:'#c2410c',bg:'radial-gradient(ellipse at 50% 30%, rgba(249,115,22,.18), rgba(194,65,12,.08) 50%, transparent 80%)'},neutral:{emoji:'😐',label:'Neutral',c1:'#94a3b8',c2:'#475569',bg:'radial-gradient(ellipse at 50% 30%, rgba(148,163,184,.1), rgba(71,85,105,.04) 50%, transparent 80%)'}};
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
+function buildWave(color){const wr=document.getElementById('wave-row');wr.innerHTML='';for(let i=0;i<20;i++){const b=document.createElement('span');b.className='wave-bar';b.style.cssText=`--d:${.3+Math.random()*.7}s;--h:${4+Math.random()*26}px;--del:${Math.random()*.5}s;background:${color};opacity:.6`;wr.appendChild(b);}}
+function renderSpotifyTracks(tracks){
+  const grid=document.getElementById('songs-grid');grid.innerHTML='';
+  tracks.forEach((track,i)=>{const card=document.createElement('div');card.className='spotify-card';card.innerHTML=`<iframe style="border-radius:12px;height:152px" src="https://open.spotify.com/embed/track/${track.trackId}?utm_source=generator&theme=0" width="100%" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;grid.appendChild(card);setTimeout(()=>card.classList.add('visible'),i*100);});
+  toast('🎵 Songs loaded from Spotify!');
+}
+function renderYouTubeVideos(videos){
+  const grid=document.getElementById('songs-grid');grid.innerHTML='';
+  if(!videos||videos.length===0){grid.innerHTML='<p style="color:var(--muted);font-size:.85rem;text-align:center;padding:2rem">No songs found for this emotion.</p>';return;}
+  videos.forEach((video,i)=>{const card=document.createElement('div');card.className='spotify-card';card.innerHTML=`<iframe style="border-radius:12px;height:220px" width="100%" src="https://www.youtube.com/embed/${video.videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;grid.appendChild(card);setTimeout(()=>card.classList.add('visible'),i*100);});
+  toast('🎵 Songs loaded from YouTube!');
+}
+async function init(){
+  const emotion=sessionStorage.getItem('emotion')||'neutral',conf=sessionStorage.getItem('confidence')||'80';
+  const e=EMOTIONS[emotion]||EMOTIONS.neutral;
+  document.getElementById('emotion-overlay').style.background=e.bg;document.getElementById('emotion-overlay').style.opacity='1';
+  document.getElementById('emotion-tag').textContent=`${e.emoji} Detected: ${e.label} · ${conf}% confident`;
+  document.getElementById('music-title').textContent=`Your ${e.label} Playlist`;
+  buildWave(e.c1);
+  try{
+    const userRes=await fetch('/api/me'),userData=await userRes.json(),regionCode=userData.region||'PK';
+    const regionNames={PK:'🇵🇰 Pakistan',IN:'🇮🇳 India',US:'🇺🇸 USA',GB:'🇬🇧 UK',SA:'🇸🇦 Saudi Arabia',TR:'🇹🇷 Turkey',JP:'🇯🇵 Japan',KR:'🇰🇷 South Korea',GLOBAL:'🌍 Global'};
+    document.getElementById('region-badge').textContent=regionNames[regionCode]||'🌍 Global';
+    if(userData.isTrial){
+      document.getElementById('section-label').textContent='🎵 YouTube Music · '+e.label;
+      const youtubeRes=await fetch(`/api/youtube/recommendations?emotion=${emotion}&region=${regionCode}`),youtubeData=await youtubeRes.json();
+      if(youtubeData.youtube&&youtubeData.videos&&youtubeData.videos.length>0){renderYouTubeVideos(youtubeData.videos);}else{toast('❌ Error loading songs');document.getElementById('songs-grid').innerHTML='<p style="color:var(--muted);text-align:center;padding:2rem">Failed to load music. Please try again.</p>';}
+    }else{
+      document.getElementById('section-label').textContent='🎵 Live from Spotify · '+e.label;
+      const spotRes=await fetch(`/api/spotify/recommendations?emotion=${emotion}&region=${regionCode}`),spotData=await spotRes.json();
+      if(spotData.spotify&&spotData.tracks&&spotData.tracks.length>0){renderSpotifyTracks(spotData.tracks);}else{toast('⚠️ Spotify unavailable');document.getElementById('songs-grid').innerHTML='<p style="color:var(--muted);text-align:center;padding:2rem">Spotify unavailable. Please try again.</p>';}
+    }
+  }catch(err){console.error('Error loading songs:',err);toast('❌ Error loading songs');document.getElementById('songs-grid').innerHTML='<p style="color:var(--muted);text-align:center;padding:2rem">Failed to load music. Please refresh the page.</p>';}
+}
+init();
+</script>
+</body>
+</html>

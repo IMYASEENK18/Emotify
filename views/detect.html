@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Emotify — Detect</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#05060a;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.15);--text:#f0ece4;--muted:#5a5a6e;--cam:200px}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Syne',sans-serif;background:var(--ink);color:var(--text);cursor:none;display:flex;align-items:center;justify-content:center;text-align:center}
+#cur,#cur-ring{display:none}
+@media(pointer:fine){
+  #cur{display:block;position:fixed;width:8px;height:8px;background:#fff;border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);mix-blend-mode:difference}
+  #cur-ring{display:block;position:fixed;width:32px;height:32px;border:1px solid rgba(255,255,255,0.3);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%)}
+}
+#bg-canvas{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.4}
+#emotion-overlay{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:0;transition:opacity 2s ease}
+.note{position:fixed;font-size:1.2rem;pointer-events:none;z-index:2;animation:floatNote var(--dur,8s) linear var(--delay,0s) infinite;opacity:0;color:rgba(255,255,255,0.06)}
+@keyframes floatNote{0%{transform:translateY(110vh) rotate(0deg);opacity:0}10%{opacity:.12}90%{opacity:.06}100%{transform:translateY(-10vh) rotate(360deg);opacity:0}}
+.inner{position:relative;z-index:10;padding:1rem;width:100%;max-width:680px}
+.back-btn{position:fixed;top:1rem;left:1rem;z-index:600;display:flex;align-items:center;gap:.5rem;padding:.5rem 1rem;border-radius:8px;background:rgba(10,12,20,.8);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .25s;backdrop-filter:blur(10px);text-decoration:none}
+.back-btn:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);transform:translateY(-1px)}
+.step-label{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem;display:flex;align-items:center;justify-content:center;gap:.75rem}
+.step-label::before,.step-label::after{content:'';width:24px;height:1px;background:var(--muted)}
+.page-title{font-family:'Instrument Serif',serif;font-size:clamp(1.6rem,4vw,3rem);font-style:italic;letter-spacing:-1px;line-height:1.1;margin-bottom:1rem}
+.cam-area{display:flex;align-items:center;justify-content:center;gap:1.5rem;margin-bottom:1rem;flex-wrap:nowrap}
+.cam-wrap{position:relative;width:var(--cam);height:var(--cam);flex-shrink:0}
+.cam-ring-1{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(255,255,255,.12);animation:ringPulse 3s ease-in-out infinite;pointer-events:none;z-index:3}
+.cam-ring-2{position:absolute;inset:-10px;border-radius:50%;border:1px dashed rgba(255,255,255,.06);animation:ringPulse 3s .5s ease-in-out infinite;pointer-events:none;z-index:3}
+.cam-ring-3{position:absolute;inset:-20px;border-radius:50%;border:1px dashed rgba(255,255,255,.03);animation:ringPulse 3s 1s ease-in-out infinite;pointer-events:none;z-index:3}
+@keyframes ringPulse{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.03);opacity:1}}
+#cam-placeholder{width:var(--cam);height:var(--cam);border-radius:50%;background:rgba(255,255,255,.03);border:2px solid rgba(255,255,255,.08);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;position:absolute;top:0;left:0;z-index:1}
+.ph-icon{font-size:2.5rem}
+.ph-lbl{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.12em;color:var(--muted)}
+#webcam{width:var(--cam);height:var(--cam);border-radius:50%;object-fit:cover;display:none;position:absolute;top:0;left:0;z-index:1}
+#detect-canvas{position:absolute;top:0;left:0;width:var(--cam);height:var(--cam);border-radius:50%;z-index:2;pointer-events:none;display:none}
+.scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);z-index:4;display:none;border-radius:50%;animation:scanMove 1.8s linear infinite}
+@keyframes scanMove{from{top:5%}to{top:95%}}
+.emo-panel{display:flex;flex-direction:column;justify-content:center;gap:5px;width:0;opacity:0;transition:opacity .5s ease,width .3s ease;visibility:hidden;flex-shrink:0;overflow:hidden}
+.emo-panel.visible{opacity:1;visibility:visible;width:150px}
+.emo-panel.visible{opacity:1;visibility:visible}
+.emo-row{display:flex;align-items:center;gap:6px}
+.emo-row-label{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.06em;color:var(--muted);width:58px;text-align:right;text-transform:capitalize;transition:color .3s}
+.emo-row-label.active{color:var(--text)}
+.emo-bar-track{flex:1;height:3px;background:rgba(255,255,255,.07);border-radius:999px;overflow:hidden}
+.emo-bar-fill{height:100%;border-radius:999px;width:0%;transition:width .3s ease}
+.emo-pct{font-family:'DM Mono',monospace;font-size:.52rem;color:var(--muted);width:26px;text-align:right;transition:color .3s}
+.emo-pct.active{color:var(--text)}
+.emotion-result{min-height:60px;display:flex;flex-direction:column;align-items:center;gap:.5rem;margin:.25rem 0}
+.emotion-name{font-family:'Instrument Serif',serif;font-size:clamp(1.8rem,5vw,2.8rem);font-style:italic;letter-spacing:-1px;opacity:0;transform:translateY(10px);transition:all .6s ease;line-height:1}
+.emotion-name.show{opacity:1;transform:translateY(0)}
+.conf-wrap{width:200px;height:3px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}
+.conf-fill{height:100%;border-radius:999px;background:rgba(255,255,255,.4);width:0%;transition:width .4s ease}
+.btns{display:flex;flex-direction:column;align-items:center;gap:.65rem}
+.btn-cam{padding:.85rem 2rem;border-radius:10px;background:var(--text);color:var(--ink);border:none;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:800;cursor:pointer;letter-spacing:.05em;text-transform:uppercase;transition:all .3s;-webkit-tap-highlight-color:transparent}
+.btn-cam:hover{transform:translateY(-2px);box-shadow:0 15px 40px rgba(255,255,255,.15)}
+.btn-music{padding:.85rem 2rem;border-radius:10px;border:none;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:800;cursor:pointer;letter-spacing:.05em;text-transform:uppercase;transition:all .3s;display:none;color:#fff;-webkit-tap-highlight-color:transparent}
+.btn-music:hover{transform:translateY(-2px)}
+.toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(10,12,20,.95);border:1px solid var(--border2);padding:.65rem 1.25rem;border-radius:10px;font-family:'DM Mono',monospace;font-size:.7rem;z-index:1000;opacity:0;transition:all .4s ease;backdrop-filter:blur(20px);white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:600px){
+  :root{--cam:180px}
+  html,body{overflow-y:auto;height:auto}
+  body{align-items:flex-start;padding:3.5rem 0 2rem}
+  .cam-area{flex-direction:column;align-items:center;gap:1rem}
+  .emo-panel{width:260px;flex-direction:column}
+  .emo-row-label{width:70px}
+  .page-title{font-size:1.5rem}
+}
+@media(max-width:360px){
+  :root{--cam:150px}
+}
+</style>
+</head>
+<body>
+<div id="cur"></div>
+<div id="cur-ring"></div>
+<canvas id="bg-canvas"></canvas>
+<div id="emotion-overlay"></div>
+<div id="notes"></div>
+<a href="/region" class="back-btn">← Back</a>
+<div id="toast" class="toast"></div>
+<div class="inner">
+  <div class="step-label">Step 2 of 2</div>
+  <div class="page-title">How Are You<br>Feeling Today?</div>
+  <div class="cam-area">
+    <div class="cam-wrap">
+      <div id="cam-placeholder">
+        <div class="ph-icon">📷</div>
+        <div class="ph-lbl">Camera off</div>
+      </div>
+      <video id="webcam" autoplay muted playsinline></video>
+      <canvas id="detect-canvas"></canvas>
+      <div class="scan-line" id="scan-line"></div>
+      <div class="cam-ring-1"></div>
+      <div class="cam-ring-2"></div>
+      <div class="cam-ring-3"></div>
+    </div>
+    <div class="emo-panel" id="emo-panel"></div>
+  </div>
+  <div class="emotion-result">
+    <div class="emotion-name" id="emotion-name">—</div>
+    <div class="conf-wrap"><div class="conf-fill" id="conf-fill"></div></div>
+  </div>
+  <div class="btns">
+    <button class="btn-cam" id="btn-cam" onclick="startCam()">📷 Enable Camera</button>
+    <button class="btn-music" id="btn-music" onclick="goToMusic()">Get My Playlist →</button>
+  </div>
+</div>
+<script>
+const cur=document.getElementById('cur'),ring=document.getElementById('cur-ring');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;cur.style.left=mx+'px';cur.style.top=my+'px'});
+(function anim(){rx+=(mx-rx)*.1;ry+=(my-ry)*.1;ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(anim)})();
+const bgCanvas=document.getElementById('bg-canvas'),bgCtx=bgCanvas.getContext('2d');
+let W,H,particles=[];
+function resize(){W=bgCanvas.width=window.innerWidth;H=bgCanvas.height=window.innerHeight}
+resize();window.addEventListener('resize',resize);
+class P{constructor(){this.reset()}reset(){this.x=Math.random()*W;this.y=Math.random()*H;this.r=Math.random()*1.2+.2;this.vx=(Math.random()-.5)*.3;this.vy=(Math.random()-.5)*.3;this.a=Math.random()*.15+.03;this.life=Math.random()*200+100;this.ml=this.life}update(){this.x+=this.vx;this.y+=this.vy;this.life--;if(this.life<0||this.x<0||this.x>W||this.y<0||this.y>H)this.reset()}draw(){bgCtx.beginPath();bgCtx.arc(this.x,this.y,this.r,0,Math.PI*2);bgCtx.fillStyle=`rgba(255,255,255,${this.a*(this.life/this.ml)})`;bgCtx.fill()}}
+for(let i=0;i<60;i++)particles.push(new P());
+(function anim(){bgCtx.clearRect(0,0,W,H);particles.forEach(p=>{p.update();p.draw()});requestAnimationFrame(anim)})();
+const noteChars=['♩','♪','♫','♬','𝄞','♭','♯'];
+const nc=document.getElementById('notes');
+for(let i=0;i<18;i++){const n=document.createElement('div');n.className='note';n.textContent=noteChars[Math.floor(Math.random()*noteChars.length)];n.style.cssText=`left:${Math.random()*100}%;--dur:${8+Math.random()*12}s;--delay:${Math.random()*-15}s`;nc.appendChild(n)}
+const EMOTIONS={happy:{emoji:'😊',label:'Happy',c1:'#f59e0b',c2:'#d97706',bg:'radial-gradient(ellipse at 50% 30%, rgba(245,158,11,.2), rgba(217,119,6,.08) 50%, transparent 80%)'},sad:{emoji:'😢',label:'Sad',c1:'#3b82f6',c2:'#1d4ed8',bg:'radial-gradient(ellipse at 50% 30%, rgba(59,130,246,.2), rgba(29,78,216,.08) 50%, transparent 80%)'},angry:{emoji:'😠',label:'Angry',c1:'#ef4444',c2:'#b91c1c',bg:'radial-gradient(ellipse at 50% 30%, rgba(239,68,68,.22), rgba(185,28,28,.1) 50%, transparent 80%)'},fearful:{emoji:'😨',label:'Fearful',c1:'#8b5cf6',c2:'#6d28d9',bg:'radial-gradient(ellipse at 50% 30%, rgba(139,92,246,.2), rgba(109,40,217,.08) 50%, transparent 80%)'},disgusted:{emoji:'🤢',label:'Disgusted',c1:'#10b981',c2:'#065f46',bg:'radial-gradient(ellipse at 50% 30%, rgba(16,185,129,.18), rgba(6,95,70,.08) 50%, transparent 80%)'},surprised:{emoji:'😲',label:'Surprised',c1:'#f97316',c2:'#c2410c',bg:'radial-gradient(ellipse at 50% 30%, rgba(249,115,22,.2), rgba(194,65,12,.08) 50%, transparent 80%)'},neutral:{emoji:'😐',label:'Neutral',c1:'#94a3b8',c2:'#475569',bg:'radial-gradient(ellipse at 50% 30%, rgba(148,163,184,.12), rgba(71,85,105,.05) 50%, transparent 80%)'}};
+const EMOTION_LIST=Object.keys(EMOTIONS);
+const EMOTION_COLORS={happy:'#f59e0b',sad:'#3b82f6',angry:'#ef4444',fearful:'#8b5cf6',disgusted:'#10b981',surprised:'#f97316',neutral:'#94a3b8'};
+let camStream=null,detectInterval=null,detectedEmotion=null,detectedConf=0,modelsLoaded=false,locked=false;
+const emotionVotes={};let detectionCount=0;
+const CAM_SIZE=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cam'))||200;
+function buildEmoPanel(){
+  const panel=document.getElementById('emo-panel');panel.innerHTML='';
+  EMOTION_LIST.forEach(key=>{
+    const e=EMOTIONS[key];const row=document.createElement('div');row.className='emo-row';row.id='row-'+key;
+    row.innerHTML=`<span class="emo-row-label" id="lbl-${key}">${e.emoji} ${key}</span><div class="emo-bar-track"><div class="emo-bar-fill" id="bar-${key}" style="background:${EMOTION_COLORS[key]}"></div></div><span class="emo-pct" id="pct-${key}">0%</span>`;
+    panel.appendChild(row);
+  });
+}
+buildEmoPanel();
+function updateEmoPanel(expressions,dominantEmotion){
+  EMOTION_LIST.forEach(key=>{
+    const val=expressions[key]||0,pct=Math.round(val*100);
+    const barEl=document.getElementById('bar-'+key),pctEl=document.getElementById('pct-'+key),lblEl=document.getElementById('lbl-'+key);
+    if(barEl)barEl.style.width=pct+'%';
+    if(pctEl){pctEl.textContent=pct+'%';pctEl.classList.toggle('active',key===dominantEmotion);}
+    if(lblEl)lblEl.classList.toggle('active',key===dominantEmotion);
+  });
+  document.getElementById('emo-panel').classList.add('visible');
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
+async function loadModels(){
+  if(modelsLoaded)return true;
+  try{toast('⏳ Loading AI models...');await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri('/models'),faceapi.nets.faceExpressionNet.loadFromUri('/models')]);modelsLoaded=true;return true;}
+  catch(err){console.error('Model load error:',err);return false;}
+}
+async function startCam(){
+  const btn=document.getElementById('btn-cam');btn.textContent='Loading AI...';btn.disabled=true;
+  const ok=await loadModels();
+  if(!ok){toast('⚠️ AI unavailable — demo mode');btn.style.display='none';document.getElementById('cam-placeholder').querySelector('.ph-icon').textContent='🎭';document.getElementById('cam-placeholder').querySelector('.ph-lbl').textContent='Demo mode';simulate();return;}
+  btn.textContent='Starting camera...';
+  navigator.mediaDevices.getUserMedia({video:{width:320,height:320},audio:false})
+    .then(stream=>{
+      camStream=stream;
+      document.getElementById('cam-placeholder').style.display='none';
+      const v=document.getElementById('webcam');v.style.display='block';v.srcObject=stream;
+      const dc=document.getElementById('detect-canvas');
+      const cs=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cam'))||200;
+      dc.width=cs;dc.height=cs;dc.style.display='block';
+      document.getElementById('scan-line').style.display='block';
+      btn.style.display='none';
+      toast('📷 Scanning your emotion...');
+      v.addEventListener('loadeddata',()=>startDetection(v),{once:true});
+    })
+    .catch(()=>{btn.style.display='none';document.getElementById('cam-placeholder').querySelector('.ph-icon').textContent='🎭';document.getElementById('cam-placeholder').querySelector('.ph-lbl').textContent='Demo mode';toast('Camera unavailable — running demo');simulate();});
+}
+function drawBox(detection,dominantEmotion,conf){
+  const dc=document.getElementById('detect-canvas'),dctx=dc.getContext('2d');
+  dctx.clearRect(0,0,dc.width,dc.height);
+  if(!detection)return;
+  const video=document.getElementById('webcam');
+  const scaleX=dc.width/video.videoWidth,scaleY=dc.height/video.videoHeight;
+  const box=detection.detection.box;
+  const x=box.x*scaleX,y=box.y*scaleY,w=box.width*scaleX,h=box.height*scaleY;
+  const color=EMOTION_COLORS[dominantEmotion]||'#fff';
+  dctx.strokeStyle=color;dctx.lineWidth=2;dctx.shadowColor=color;dctx.shadowBlur=8;
+  const r=8;dctx.beginPath();dctx.moveTo(x+r,y);dctx.lineTo(x+w-r,y);dctx.quadraticCurveTo(x+w,y,x+w,y+r);dctx.lineTo(x+w,y+h-r);dctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);dctx.lineTo(x+r,y+h);dctx.quadraticCurveTo(x,y+h,x,y+h-r);dctx.lineTo(x,y+r);dctx.quadraticCurveTo(x,y,x+r,y);dctx.closePath();dctx.stroke();
+  const label=`${EMOTIONS[dominantEmotion].emoji} ${dominantEmotion} ${conf}%`;
+  dctx.shadowBlur=0;dctx.font='bold 11px DM Mono, monospace';
+  const tw=dctx.measureText(label).width,lx=x,ly=y>18?y-6:y+h+16;
+  dctx.fillStyle='rgba(5,6,10,0.85)';dctx.beginPath();dctx.roundRect(lx-2,ly-13,tw+10,18,4);dctx.fill();
+  dctx.fillStyle=color;dctx.fillText(label,lx+3,ly);
+}
+async function startDetection(video){
+  detectInterval=setInterval(async()=>{
+    if(video.readyState<2||locked)return;
+    try{
+      const result=await faceapi.detectSingleFace(video,new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.3})).withFaceExpressions();
+      if(!result){document.getElementById('emotion-name').textContent='👀 Show your face';document.getElementById('emotion-name').classList.add('show');const dc=document.getElementById('detect-canvas');dc.getContext('2d').clearRect(0,0,dc.width,dc.height);return;}
+      const expressions=result.expressions,sorted=Object.entries(expressions).sort((a,b)=>b[1]-a[1]),emotion=sorted[0][0],conf=Math.round(sorted[0][1]*100);
+      updateEmoPanel(expressions,emotion);drawBox(result,emotion,conf);
+      const e=EMOTIONS[emotion]||EMOTIONS.neutral;
+      document.getElementById('emotion-name').textContent=`${e.emoji} ${e.label}`;document.getElementById('emotion-name').classList.add('show');
+      document.getElementById('conf-fill').style.width=conf+'%';
+      emotionVotes[emotion]=(emotionVotes[emotion]||0)+1;detectionCount++;
+      if(detectionCount>=20){locked=true;clearInterval(detectInterval);const winner=Object.entries(emotionVotes).sort((a,b)=>b[1]-a[1])[0][0];const winnerConf=Math.round((emotionVotes[winner]/detectionCount)*100);lockEmotion(winner,Math.max(winnerConf,72));}
+    }catch(err){console.error('Detection error:',err);}
+  },200);
+}
+function simulate(){
+  let tick=0;const chosen=EMOTION_LIST[Math.floor(Math.random()*EMOTION_LIST.length)];
+  detectInterval=setInterval(()=>{
+    tick++;const cur=tick>20?chosen:EMOTION_LIST[Math.floor(Math.random()*EMOTION_LIST.length)];const conf=tick>20?Math.floor(85+Math.random()*12):Math.floor(25+Math.random()*55);const e=EMOTIONS[cur];
+    document.getElementById('emotion-name').textContent=`${e.emoji} ${e.label}`;document.getElementById('emotion-name').classList.add('show');document.getElementById('conf-fill').style.width=conf+'%';
+    const fakeExp={};EMOTION_LIST.forEach(k=>{fakeExp[k]=Math.random()*0.1;});fakeExp[cur]=conf/100;updateEmoPanel(fakeExp,cur);
+    if(tick>28){clearInterval(detectInterval);lockEmotion(chosen,90+Math.floor(Math.random()*8));}
+  },160);
+}
+function lockEmotion(emotion,conf){
+  detectedEmotion=emotion;detectedConf=conf;const e=EMOTIONS[emotion];
+  document.getElementById('emotion-overlay').style.background=e.bg;document.getElementById('emotion-overlay').style.opacity='1';
+  document.getElementById('scan-line').style.display='none';
+  const bm=document.getElementById('btn-music');bm.style.display='block';bm.style.background=`linear-gradient(135deg,${e.c1},${e.c2})`;bm.textContent=`Get My ${e.label} Playlist →`;
+  toast(`${e.emoji} Detected: ${e.label} (${conf}% confident)`);
+}
+async function goToMusic(){
+  if(!detectedEmotion)return;
+  if(camStream)camStream.getTracks().forEach(t=>t.stop());
+  await fetch('/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emotion:detectedEmotion,confidence:detectedConf,region:'',songs:[]})});
+  sessionStorage.setItem('emotion',detectedEmotion);sessionStorage.setItem('confidence',String(detectedConf));
+  window.location.href='/music';
+}
+</script>
+</body>
+</html>
