@@ -51,6 +51,7 @@ router.get('/api/me', requireAuth, async (req, res) => {
       name: user.name,
       isTrial: user.isTrial,
       trialValid: user.isTrialValid(),
+       trialStart: user.trialStartDate,
       region: user.region
     });
   } catch (err) {

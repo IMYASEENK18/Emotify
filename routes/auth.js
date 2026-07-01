@@ -88,8 +88,6 @@ router.get('/spotify/callback', async (req, res) => {
 router.post('/trial', async (req, res) => {
   try {
     const { name } = req.body;
-
-    // If user with same name exists, log them back in
     let trialUser = await User.findOne({ name: name, isTrial: true });
     if (!trialUser) {
       trialUser = new User({
@@ -99,12 +97,14 @@ router.post('/trial', async (req, res) => {
       });
       await trialUser.save();
     }
-
     req.session.userId = trialUser._id;
     req.session.userName = trialUser.name;
     req.session.isTrial = true;
 
-    return res.json({ success: true, name: trialUser.name });
+    req.session.save((err) => {
+      if (err) console.error('Session save error:', err);
+      return res.json({ success: true, name: trialUser.name });
+    });
   } catch (err) {
     console.error('Trial error:', err);
     return res.status(500).json({ success: false, error: err.message });
@@ -113,8 +113,10 @@ router.post('/trial', async (req, res) => {
 
 // ── LOGOUT ──
 router.get('/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/');
+  req.session.destroy((err) => {
+    res.clearCookie('connect.sid');
+    res.redirect('/');
+  });
 });
 // ── REGISTER ──
 router.post('/register', async (req, res) => {
